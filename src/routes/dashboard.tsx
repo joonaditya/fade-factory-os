@@ -357,7 +357,7 @@ function OwnerDashboard() {
                     border: "1px solid oklch(0.3 0.018 55)",
                     borderRadius: "8px",
                   }}
-                  formatter={(v: number) => `$${Number(v).toFixed(0)}`}
+                  formatter={(v) => `$${Number(v ?? 0).toFixed(0)}`}
                 />
                 <Bar dataKey="revenue" fill="oklch(0.78 0.14 80)" radius={[6, 6, 0, 0]} />
               </BarChart>
