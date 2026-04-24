@@ -3,7 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/lib/auth";
+import { useAuth, ROLE_HOME } from "@/lib/auth";
 import { Scissors, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,14 +22,14 @@ function LoginPage() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const { error, role } = await signIn(email, password);
     setLoading(false);
     if (error) {
       toast.error(error);
       return;
     }
     toast.success("Welcome back");
-    navigate({ to: "/dashboard" });
+    navigate({ to: role ? ROLE_HOME[role] : "/dashboard" });
   };
 
   return (
