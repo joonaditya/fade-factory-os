@@ -57,29 +57,36 @@ type AgentLog = {
 };
 
 type DueCustomer = {
-  customer_id?: string;
-  id?: string;
-  name?: string | null;
-  full_name?: string | null;
-  phone?: string | null;
-  last_visit?: string | null;
-  last_appointment?: string | null;
-  days_since?: number | null;
+  customer_id: string;
+  name: string | null;
+  phone: string | null;
+  last_visit_date: string | null;
+  days_since_visit: number | null;
+  last_nudge_sent: string | null;
+  preferred_barber_name: string | null;
+  barber_preference: string | null;
+  shop_id: string | null;
 };
 
-type ChannelRow = { channel: string | null; count: number | null; bookings?: number | null };
+type ChannelRow = {
+  booking_channel: string | null;
+  total_bookings: number | null;
+  month: string | null;
+  shop_id: string | null;
+};
 type RevenuePerBarberRow = {
-  barber_id?: string | null;
-  barber_name?: string | null;
-  name?: string | null;
+  barber_id: string | null;
+  barber_name: string | null;
   revenue: number | null;
+  completed_appts: number | null;
+  week_start: string | null;
+  shop_id: string | null;
 };
 type PeakHourRow = {
-  hour: number | null;
-  day_of_week?: number | null;
-  weekday?: number | null;
-  bookings?: number | null;
-  count?: number | null;
+  day_of_week: number | null;
+  hour_of_day: number | null;
+  appt_count: number | null;
+  shop_id: string | null;
 };
 
 const COLORS = ["oklch(0.78 0.14 80)", "oklch(0.55 0.13 35)", "oklch(0.65 0.1 150)", "oklch(0.6 0.15 260)"];
@@ -190,10 +197,13 @@ function OwnerDashboard() {
 
   const channelData = useMemo(() => {
     if (channels.length > 0) {
-      return channels.map((c) => ({
-        name: c.channel ?? "unknown",
-        value: Number(c.count ?? c.bookings ?? 0),
-      }));
+      // Aggregate across months by channel
+      const map = new Map<string, number>();
+      channels.forEach((c) => {
+        const k = (c.booking_channel ?? "unknown").toLowerCase();
+        map.set(k, (map.get(k) ?? 0) + Number(c.total_bookings ?? 0));
+      });
+      return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
     }
     // Fallback: derive from appointments
     const map = new Map<string, number>();
@@ -206,10 +216,14 @@ function OwnerDashboard() {
 
   const barberData = useMemo(() => {
     if (revenuePerBarber.length > 0) {
-      return revenuePerBarber.map((r) => ({
-        name: r.barber_name ?? r.name ?? (r.barber_id ? barbers[r.barber_id] : "—") ?? "—",
-        revenue: Number(r.revenue ?? 0),
-      }));
+      // Aggregate across weeks by barber
+      const map = new Map<string, number>();
+      revenuePerBarber.forEach((r) => {
+        const name =
+          r.barber_name ?? (r.barber_id ? barbers[r.barber_id] : null) ?? "—";
+        map.set(name, (map.get(name) ?? 0) + Number(r.revenue ?? 0));
+      });
+      return Array.from(map.entries()).map(([name, revenue]) => ({ name, revenue }));
     }
     const map = new Map<string, number>();
     appointments.forEach((a) => {
@@ -226,9 +240,9 @@ function OwnerDashboard() {
     const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
     if (peakHours.length > 0) {
       peakHours.forEach((p) => {
-        const day = (p.day_of_week ?? p.weekday ?? 0) as number;
-        const hour = (p.hour ?? 0) as number;
-        const v = Number(p.bookings ?? p.count ?? 0);
+        const day = Number(p.day_of_week ?? 0);
+        const hour = Number(p.hour_of_day ?? 0);
+        const v = Number(p.appt_count ?? 0);
         if (day >= 0 && day < 7 && hour >= 0 && hour < 24) grid[day][hour] = v;
       });
     } else {
@@ -448,12 +462,12 @@ function OwnerDashboard() {
           ) : (
             <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
               {dueCustomers.map((c, i) => {
-                const name = c.full_name ?? c.name ?? "Customer";
-                const last = c.last_appointment ?? c.last_visit;
-                const days = c.days_since;
+                const name = c.name ?? "Customer";
+                const last = c.last_visit_date;
+                const days = c.days_since_visit;
                 return (
                   <div
-                    key={c.customer_id ?? c.id ?? i}
+                    key={c.customer_id ?? i}
                     className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/40"
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -462,6 +476,11 @@ function OwnerDashboard() {
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-medium truncate">{name}</p>
+                        {c.preferred_barber_name && (
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            Prefers {c.preferred_barber_name}
+                          </p>
+                        )}
                         {last && (
                           <p className="text-xs text-muted-foreground">
                             Last: {format(new Date(last), "MMM d")}
