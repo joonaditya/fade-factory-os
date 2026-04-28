@@ -37,12 +37,12 @@ export const Route = createFileRoute("/dashboard")({
 });
 
 type Appointment = {
-  id: string;
+  appt_id: string;
   customer_id: string | null;
   barber_id: string | null;
   service_id: string | null;
-  start_time: string;
-  end_time: string | null;
+  appt_datetime: string;
+  end_datetime: string | null;
   status: string | null;
   channel: string | null;
   price: number | null;
@@ -121,10 +121,10 @@ function OwnerDashboard() {
         supabase
           .from("appointments")
           .select("*")
-          .gte("start_time", fourWeeksAgo)
-          .order("start_time", { ascending: false }),
+          .gte("appt_datetime", fourWeeksAgo)
+          .order("appt_datetime", { ascending: false }),
         supabase.from("services").select("id,name,price"),
-        supabase.from("barbers").select("id,name"),
+        supabase.from("barbers").select("barber_id,name"),
         supabase
           .from("agent_logs")
           .select("*")
@@ -143,8 +143,8 @@ function OwnerDashboard() {
       });
       setServices(sMap);
       const bMap: Record<string, string> = {};
-      (barbersRes.data ?? []).forEach((b: { id: string; name: string }) => {
-        bMap[b.id] = b.name;
+      (barbersRes.data ?? []).forEach((b: { barber_id: string; name: string }) => {
+        bMap[b.barber_id] = b.name;
       });
       setBarbers(bMap);
       setAgentLogs((logsRes.data ?? []) as AgentLog[]);
@@ -168,15 +168,15 @@ function OwnerDashboard() {
 
     const todayConfirmed = appointments.filter(
       (a) =>
-        a.start_time >= todayStart &&
-        a.start_time <= todayEnd &&
+        a.appt_datetime >= todayStart &&
+        a.appt_datetime <= todayEnd &&
         ["confirmed", "completed"].includes((a.status ?? "").toLowerCase())
     );
     const todayRevenue = todayConfirmed.reduce((s, a) => s + priceFor(a), 0);
 
-    const thisWeek = appointments.filter((a) => a.start_time >= weekStart);
+    const thisWeek = appointments.filter((a) => a.appt_datetime >= weekStart);
     const lastWeek = appointments.filter(
-      (a) => a.start_time >= lastWeekStart && a.start_time < weekStart
+      (a) => a.appt_datetime >= lastWeekStart && a.appt_datetime < weekStart
     );
 
     const total = appointments.length;
@@ -215,23 +215,23 @@ function OwnerDashboard() {
   }, [channels, appointments]);
 
   const barberData = useMemo(() => {
+    // Seed every barber at $0 so all appear even with no appointments
+    const map = new Map<string, number>(
+      Object.values(barbers).map((name) => [name, 0])
+    );
     if (revenuePerBarber.length > 0) {
-      // Aggregate across weeks by barber
-      const map = new Map<string, number>();
       revenuePerBarber.forEach((r) => {
-        const name =
-          r.barber_name ?? (r.barber_id ? barbers[r.barber_id] : null) ?? "—";
+        const name = r.barber_name ?? (r.barber_id ? barbers[r.barber_id] : null) ?? "—";
         map.set(name, (map.get(name) ?? 0) + Number(r.revenue ?? 0));
       });
-      return Array.from(map.entries()).map(([name, revenue]) => ({ name, revenue }));
+    } else {
+      appointments.forEach((a) => {
+        if (!a.barber_id) return;
+        const key = barbers[a.barber_id] ?? "Unknown";
+        const price = Number(a.price ?? (a.service_id ? services[a.service_id]?.price : 0) ?? 0);
+        map.set(key, (map.get(key) ?? 0) + price);
+      });
     }
-    const map = new Map<string, number>();
-    appointments.forEach((a) => {
-      if (!a.barber_id) return;
-      const key = barbers[a.barber_id] ?? "Unknown";
-      const price = Number(a.price ?? (a.service_id ? services[a.service_id]?.price : 0) ?? 0);
-      map.set(key, (map.get(key) ?? 0) + price);
-    });
     return Array.from(map.entries()).map(([name, revenue]) => ({ name, revenue }));
   }, [revenuePerBarber, appointments, barbers, services]);
 
@@ -247,7 +247,7 @@ function OwnerDashboard() {
       });
     } else {
       appointments.forEach((a) => {
-        const d = new Date(a.start_time);
+        const d = new Date(a.appt_datetime);
         grid[d.getDay()][d.getHours()] += 1;
       });
     }
@@ -361,17 +361,17 @@ function OwnerDashboard() {
             <Empty />
           ) : (
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={barberData}>
+              <BarChart data={barberData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.3 0.018 55)" />
                 <XAxis dataKey="name" stroke="oklch(0.7 0.02 70)" fontSize={12} />
-                <YAxis stroke="oklch(0.7 0.02 70)" fontSize={12} />
+                <YAxis stroke="oklch(0.7 0.02 70)" fontSize={12} tickFormatter={(v) => `$${v}`} />
                 <Tooltip
                   contentStyle={{
                     background: "oklch(0.2 0.014 60)",
                     border: "1px solid oklch(0.3 0.018 55)",
                     borderRadius: "8px",
                   }}
-                  formatter={(v) => `$${Number(v ?? 0).toFixed(0)}`}
+                  formatter={(v) => [`$${Number(v ?? 0).toFixed(0)}`, "Revenue"]}
                 />
                 <Bar dataKey="revenue" fill="oklch(0.78 0.14 80)" radius={[6, 6, 0, 0]} />
               </BarChart>

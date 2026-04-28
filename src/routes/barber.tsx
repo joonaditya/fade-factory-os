@@ -1,8 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -32,16 +33,16 @@ export const Route = createFileRoute("/barber")({
   ),
 });
 
-type Barber = { id: string; name: string; rating?: number | null };
+type Barber = { barber_id: string; name: string; rating?: number | null };
 type Customer = { id: string; name?: string | null; full_name?: string | null };
 type Service = { id: string; name: string; price: number | null };
 type Appointment = {
-  id: string;
+  appt_id: string;
   customer_id: string | null;
   barber_id: string | null;
   service_id: string | null;
-  start_time: string;
-  end_time: string | null;
+  appt_datetime: string;
+  end_datetime: string | null;
   status: string | null;
   price: number | null;
 };
@@ -49,6 +50,10 @@ type Appointment = {
 const STATUSES = ["confirmed", "completed", "no-show"] as const;
 
 function BarberDashboard() {
+  const { user, profile } = useAuth();
+  const navigate = useNavigate();
+  const isOwner = profile?.role === "owner";
+
   const [barbers, setBarbers] = useState<Barber[]>([]);
   const [selected, setSelected] = useState<string>("");
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -57,14 +62,33 @@ function BarberDashboard() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
 
+  // Redirect customers away
+  useEffect(() => {
+    if (profile?.role === "customer") navigate({ to: "/booking" });
+  }, [profile, navigate]);
+
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from("barbers").select("*").order("name");
       const list = (data ?? []) as Barber[];
       setBarbers(list);
-      if (list.length > 0) setSelected(list[0].id);
+
+      if (profile?.role === "barber" && user) {
+        // Try to find this barber's own record via user_id
+        const { data: mine } = await supabase
+          .from("barbers")
+          .select("barber_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        if (mine?.barber_id) {
+          setSelected(mine.barber_id);
+          return;
+        }
+      }
+      // Owner or unlinked barber: default to first
+      if (list.length > 0) setSelected(list[0].barber_id);
     })();
-  }, []);
+  }, [profile, user]);
 
   useEffect(() => {
     if (!selected) return;
@@ -76,8 +100,8 @@ function BarberDashboard() {
           .from("appointments")
           .select("*")
           .eq("barber_id", selected)
-          .gte("start_time", weekStart)
-          .order("start_time", { ascending: true }),
+          .gte("appt_datetime", weekStart)
+          .order("appt_datetime", { ascending: true }),
         supabase.from("customers").select("id,name,full_name"),
         supabase.from("services").select("id,name,price"),
       ]);
@@ -93,14 +117,14 @@ function BarberDashboard() {
   }, [selected]);
 
   const selectedBarber = useMemo(
-    () => barbers.find((b) => b.id === selected),
+    () => barbers.find((b) => b.barber_id === selected),
     [barbers, selected]
   );
 
   const todays = useMemo(() => {
     const s = startOfDay(new Date()).toISOString();
     const e = endOfDay(new Date()).toISOString();
-    return appointments.filter((a) => a.start_time >= s && a.start_time <= e);
+    return appointments.filter((a) => a.appt_datetime >= s && a.appt_datetime <= e);
   }, [appointments]);
 
   const stats = useMemo(() => {
@@ -114,13 +138,13 @@ function BarberDashboard() {
 
   const updateStatus = async (id: string, status: string) => {
     setUpdating(id);
-    const { error } = await supabase.from("appointments").update({ status }).eq("id", id);
+    const { error } = await supabase.from("appointments").update({ status }).eq("appt_id", id);
     setUpdating(null);
     if (error) {
       toast.error(error.message);
       return;
     }
-    setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, status } : a)));
+    setAppointments((prev) => prev.map((a) => (a.appt_id === id ? { ...a, status } : a)));
     toast.success(`Marked as ${status}`);
   };
 
@@ -134,23 +158,34 @@ function BarberDashboard() {
             {format(new Date(), "EEEE, MMMM d, yyyy")}
           </p>
         </div>
-        <div className="min-w-[220px]">
-          <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
-            Select barber
-          </label>
-          <Select value={selected} onValueChange={setSelected}>
-            <SelectTrigger>
-              <SelectValue placeholder="Choose a barber" />
-            </SelectTrigger>
-            <SelectContent>
-              {barbers.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {isOwner ? (
+          <div className="min-w-[220px]">
+            <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
+              Select barber
+            </label>
+            <Select value={selected} onValueChange={setSelected}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a barber" />
+              </SelectTrigger>
+              <SelectContent>
+                {barbers.map((b) => (
+                  <SelectItem key={b.barber_id} value={b.barber_id}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : (
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+              Viewing schedule for
+            </p>
+            <p className="font-display text-lg font-semibold text-primary">
+              {barbers.find((b) => b.barber_id === selected)?.name ?? "—"}
+            </p>
+          </div>
+        )}
       </header>
 
       {loading ? (
@@ -203,15 +238,15 @@ function BarberDashboard() {
                   const status = (a.status ?? "confirmed").toLowerCase();
                   return (
                     <div
-                      key={a.id}
+                      key={a.appt_id}
                       className="flex items-center gap-4 p-4 rounded-lg bg-muted/30 border border-border/40 hover:border-primary/30 transition-colors"
                     >
                       <div className="text-center min-w-[60px]">
                         <p className="font-display text-xl font-bold">
-                          {format(new Date(a.start_time), "h:mm")}
+                          {format(new Date(a.appt_datetime), "h:mm")}
                         </p>
                         <p className="text-[10px] text-muted-foreground uppercase">
-                          {format(new Date(a.start_time), "a")}
+                          {format(new Date(a.appt_datetime), "a")}
                         </p>
                       </div>
                       <div className="h-10 w-px bg-border" />
@@ -235,11 +270,11 @@ function BarberDashboard() {
                             key={s}
                             size="sm"
                             variant={status === s ? "default" : "outline"}
-                            onClick={() => updateStatus(a.id, s)}
-                            disabled={updating === a.id}
+                            onClick={() => updateStatus(a.appt_id, s)}
+                            disabled={updating === a.appt_id}
                             className="h-8 text-xs capitalize"
                           >
-                            {updating === a.id ? (
+                            {updating === a.appt_id ? (
                               <Loader2 className="h-3 w-3 animate-spin" />
                             ) : (
                               s
