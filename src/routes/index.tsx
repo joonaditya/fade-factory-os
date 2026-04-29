@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth, ROLE_HOME } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,12 +21,14 @@ import {
   LogOut,
   LayoutDashboard,
   Phone,
-  Calendar,
   ShieldCheck,
   Sparkles,
   ChevronRight,
   MapPin,
-  Instagram,
+  Globe,
+  MessageSquare,
+  CheckCircle2,
+  Droplets,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -64,6 +67,37 @@ const IMGS = {
   about: "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?auto=format&fit=crop&w=1920&q=80",
 };
 
+const HAIRCUT_STYLES = [
+  { name: "Fade with Side Part", tags: ["Refined", "Sharp", "Structured"] },
+  { name: "Clippered Pushback", tags: ["Low Maintenance", "Modern", "Versatile"] },
+  { name: "Short Scissor Cut", tags: ["Classic", "Effortless", "Tailored"] },
+  { name: "Parted Scissor Cut", tags: ["Classic", "Professional", "Versatile"] },
+  { name: "Tousled Layers", tags: ["Effortless", "Textured", "Volume"] },
+  { name: "Long Pushback", tags: ["Flowing", "Relaxed", "Volume"] },
+  { name: "Clippered Sides + Layered Top", tags: ["Edgy", "Low Maintenance", "Modern"] },
+  { name: "Long Scissor Cut", tags: ["Flowing", "Layered", "Timeless"] },
+  { name: "Short Pushback", tags: ["Classic", "Polished", "Structured"] },
+  { name: "Short Layer", tags: ["Low Maintenance", "Simple", "Versatile"] },
+  { name: "Crew Cut", tags: ["Classic", "Low Maintenance", "Practical"] },
+  { name: "Classic Fade", tags: ["Classic", "Professional", "Versatile"] },
+  { name: "Bald Fade", tags: ["Classic", "Sleek", "Versatile"] },
+  { name: "All Over Clipper", tags: ["Clean", "Simple", "Timeless"] },
+  { name: "Short Fade", tags: ["Bold", "Clean", "Fashionable"] },
+  { name: "Pompadour", tags: ["Artsy", "Fun", "Trendy"] },
+];
+
+const ADD_ON_SERVICES = [
+  { icon: Scissors, name: "Neck Trim", desc: "Clean up your neckline between cuts for a fresh, polished look." },
+  { icon: Droplets, name: "Beard Trim", desc: "Shape and define your beard with expert precision." },
+  { icon: Sparkles, name: "Shampoo", desc: "Relaxing wash and condition before your cut." },
+];
+
+const HOW_IT_WORKS = [
+  { step: "01", icon: MessageSquare, title: "Consult", desc: "Tell your barber exactly what you want. We listen before we cut." },
+  { step: "02", icon: Scissors, title: "Cut", desc: "Precision work from skilled barbers who take pride in every detail." },
+  { step: "03", icon: CheckCircle2, title: "Styled", desc: "Walk out looking sharp — the haircut you want, every single time." },
+];
+
 function useParallax(speed = 0.4) {
   const [offset, setOffset] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -91,7 +125,6 @@ function Landing() {
   const [dataLoading, setDataLoading] = useState(true);
   const [scrollY, setScrollY] = useState(0);
 
-  // Global scroll for hero parallax
   useEffect(() => {
     const onScroll = () => setScrollY(window.scrollY);
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -135,6 +168,7 @@ function Landing() {
 
           <nav className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
             <a href="#services" className="hover:text-foreground transition-colors">Services</a>
+            <a href="#styles" className="hover:text-foreground transition-colors">Styles</a>
             <a href="#team" className="hover:text-foreground transition-colors">Our Team</a>
             <a href="#about" className="hover:text-foreground transition-colors">About</a>
           </nav>
@@ -186,9 +220,8 @@ function Landing() {
         </div>
       </header>
 
-      {/* ── Hero with Parallax ── */}
+      {/* ── Hero ── */}
       <section className="relative h-screen min-h-[600px] overflow-hidden flex items-center justify-center">
-        {/* Parallax background image */}
         <div
           className="absolute inset-0 scale-110"
           style={{
@@ -199,10 +232,8 @@ function Landing() {
             willChange: "transform",
           }}
         />
-        {/* Gradient overlay */}
         <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, rgba(20,14,8,0.7) 0%, rgba(20,14,8,0.5) 50%, rgba(20,14,8,0.85) 100%)" }} />
 
-        {/* Content */}
         <div
           className="relative z-10 text-center px-6 max-w-4xl mx-auto"
           style={{ transform: `translateY(${scrollY * 0.12}px)`, willChange: "transform" }}
@@ -213,29 +244,28 @@ function Landing() {
           </div>
 
           <h1 className="font-display text-6xl sm:text-8xl font-bold mb-6 leading-[1.02] text-white drop-shadow-2xl">
-            Look Sharp.
+            Your Cut.
             <br />
             <span className="bg-clip-text text-transparent" style={{ backgroundImage: "var(--gradient-gold)" }}>
-              Feel Confident.
+              Every Time.
             </span>
           </h1>
 
-          <p className="text-lg text-white/70 max-w-xl mx-auto mb-10 leading-relaxed">
-            Premium fades, cuts, and grooming — powered by AI scheduling so you spend less time waiting and more time looking fresh.
+          <p className="text-lg text-white/70 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Whether you're after a bald fade, classic crew cut, parted scissor cut, or something in between — you can get the haircut you want at Fade Factory.
           </p>
 
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <Button size="lg" onClick={handleBookNow} className="font-medium text-base h-12 px-8" style={{ boxShadow: "var(--shadow-gold)" }}>
               Book Your Cut <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <a href="#team">
+            <a href="#styles">
               <Button size="lg" variant="outline" className="h-12 px-8 border-white/30 text-white hover:bg-white/10 hover:text-white bg-transparent">
-                Meet the Team
+                Browse Styles
               </Button>
             </a>
           </div>
 
-          {/* Trust badges */}
           <div className="flex items-center justify-center gap-8 mt-14 flex-wrap text-sm text-white/60">
             {[
               { icon: Star, text: "4.9★ Avg Rating" },
@@ -250,69 +280,162 @@ function Landing() {
           </div>
         </div>
 
-        {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-white/40 text-xs animate-bounce">
           <span>scroll</span>
           <div className="h-6 w-px bg-white/30" />
         </div>
       </section>
 
-      {/* ── Services ── */}
-      <section id="services" className="container mx-auto px-6 py-24">
+      {/* ── How It Works ── */}
+      <section className="container mx-auto px-6 py-20">
         <div className="text-center mb-12">
-          <p className="text-primary text-xs font-medium uppercase tracking-widest mb-3">What We Offer</p>
-          <h2 className="font-display text-4xl font-bold">Our Services</h2>
+          <p className="text-primary text-xs font-medium uppercase tracking-widest mb-3">The Process</p>
+          <h2 className="font-display text-4xl font-bold">The haircut you want, the first time and every time.</h2>
           <p className="text-muted-foreground mt-3 max-w-lg mx-auto text-sm">
-            From classic cuts to fresh fades — every service delivered with precision.
+            Every visit starts with a consultation so your barber knows exactly what you're looking for.
+          </p>
+        </div>
+        <div className="grid md:grid-cols-3 gap-6">
+          {HOW_IT_WORKS.map((step) => (
+            <div
+              key={step.step}
+              className="relative rounded-xl border border-border/60 bg-card p-8 flex flex-col items-center text-center"
+              style={{ boxShadow: "var(--shadow-elegant)" }}
+            >
+              <span className="absolute top-5 right-6 font-display text-5xl font-bold text-border/40 select-none">{step.step}</span>
+              <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-5" style={{ background: "var(--gradient-gold)" }}>
+                <step.icon className="h-6 w-6 text-primary-foreground" />
+              </div>
+              <h3 className="font-display text-xl font-bold mb-2">{step.title}</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Services from Supabase ── */}
+      <section id="services" className="bg-card/30 py-24">
+        <div className="container mx-auto px-6">
+          <div className="text-center mb-12">
+            <p className="text-primary text-xs font-medium uppercase tracking-widest mb-3">What We Offer</p>
+            <h2 className="font-display text-4xl font-bold">Haircare Services</h2>
+            <p className="text-muted-foreground mt-3 max-w-lg mx-auto text-sm">
+              From classic cuts to fresh fades — every service delivered with precision.
+            </p>
+          </div>
+
+          {dataLoading ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="rounded-xl border border-border/40 bg-card/60 h-48 animate-pulse" />
+              ))}
+            </div>
+          ) : services.length === 0 ? (
+            <div className="text-center text-muted-foreground py-10">No services listed yet.</div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {services.map((svc) => (
+                <div
+                  key={svc.id}
+                  className="group rounded-xl border border-border/60 bg-card p-6 hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 flex flex-col"
+                  style={{ boxShadow: "var(--shadow-elegant)" }}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--gradient-gold)" }}>
+                      <Scissors className="h-5 w-5 text-primary-foreground" />
+                    </div>
+                    {svc.price != null && (
+                      <span className="font-display text-2xl font-bold text-primary">${Number(svc.price).toFixed(0)}</span>
+                    )}
+                  </div>
+                  <h3 className="font-display text-lg font-semibold mb-1">{svc.name}</h3>
+                  {svc.description && (
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-2 flex-1">{svc.description}</p>
+                  )}
+                  {svc.duration_min != null && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
+                      <Clock className="h-3 w-3" />{svc.duration_min} min
+                    </div>
+                  )}
+                  <button
+                    onClick={handleBookNow}
+                    className="mt-auto flex items-center justify-between w-full text-sm text-muted-foreground hover:text-primary transition-colors pt-3 border-t border-border/40"
+                  >
+                    Book this service <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Add-on services */}
+          <div className="mt-10">
+            <p className="text-center text-xs font-medium uppercase tracking-widest text-muted-foreground mb-5">Add-On Services</p>
+            <div className="grid sm:grid-cols-3 gap-4">
+              {ADD_ON_SERVICES.map((addon) => (
+                <div
+                  key={addon.name}
+                  className="rounded-xl border border-border/60 bg-card p-5 flex items-start gap-4 hover:border-primary/40 transition-colors"
+                  style={{ boxShadow: "var(--shadow-elegant)" }}
+                >
+                  <div className="h-9 w-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--gradient-gold)" }}>
+                    <addon.icon className="h-4 w-4 text-primary-foreground" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm">{addon.name}</h4>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{addon.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Haircut Styles Lookbook ── */}
+      <section id="styles" className="container mx-auto px-6 py-24">
+        <div className="text-center mb-12">
+          <p className="text-primary text-xs font-medium uppercase tracking-widest mb-3">The Lookbook</p>
+          <h2 className="font-display text-4xl font-bold">Haircuts for Men</h2>
+          <p className="text-muted-foreground mt-3 max-w-xl mx-auto text-sm">
+            Short layers, bald fades, classic clipper cuts, and everything in between. Browse what your barber can do.
           </p>
         </div>
 
-        {dataLoading ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-xl border border-border/40 bg-card/60 h-48 animate-pulse" />
-            ))}
-          </div>
-        ) : services.length === 0 ? (
-          <div className="text-center text-muted-foreground py-10">No services listed yet.</div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {services.map((svc) => (
-              <div
-                key={svc.id}
-                className="group rounded-xl border border-border/60 bg-card p-6 hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 flex flex-col"
-                style={{ boxShadow: "var(--shadow-elegant)" }}
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: "var(--gradient-gold)" }}>
-                    <Scissors className="h-5 w-5 text-primary-foreground" />
-                  </div>
-                  {svc.price != null && (
-                    <span className="font-display text-2xl font-bold text-primary">${Number(svc.price).toFixed(0)}</span>
-                  )}
-                </div>
-                <h3 className="font-display text-lg font-semibold mb-1">{svc.name}</h3>
-                {svc.description && (
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-2 flex-1">{svc.description}</p>
-                )}
-                {svc.duration_min != null && (
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-3">
-                    <Clock className="h-3 w-3" />{svc.duration_min} min
-                  </div>
-                )}
-                <button
-                  onClick={handleBookNow}
-                  className="mt-auto flex items-center justify-between w-full text-sm text-muted-foreground hover:text-primary transition-colors pt-3 border-t border-border/40"
-                >
-                  Book this service <ChevronRight className="h-4 w-4" />
-                </button>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {HAIRCUT_STYLES.map((style) => (
+            <div
+              key={style.name}
+              className="group rounded-xl border border-border/60 bg-card p-5 hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 cursor-pointer"
+              style={{ boxShadow: "var(--shadow-elegant)" }}
+              onClick={handleBookNow}
+            >
+              {/* Style icon strip */}
+              <div className="h-1.5 w-8 rounded-full mb-4" style={{ background: "var(--gradient-gold)" }} />
+              <h3 className="font-display text-base font-semibold mb-3 leading-tight">{style.name}</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {style.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="text-[10px] px-2 py-0.5 font-normal">
+                    {tag}
+                  </Badge>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+              <div className="mt-4 flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                Book this style <ChevronRight className="h-3 w-3" />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="text-center mt-10">
+          <p className="text-sm text-muted-foreground mb-4">Not sure which style is right for you?</p>
+          <Button onClick={handleBookNow} style={{ boxShadow: "var(--shadow-gold)" }}>
+            Book a Consultation <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
       </section>
 
-      {/* ── Parallax Divider 1 ── */}
+      {/* ── Parallax Divider ── */}
       <div ref={divider1.ref} className="relative h-72 overflow-hidden">
         <div
           className="absolute inset-0 scale-110"
@@ -391,7 +514,7 @@ function Landing() {
         )}
       </section>
 
-      {/* ── Parallax Divider 2 / About ── */}
+      {/* ── About / AI ── */}
       <section id="about" ref={divider2.ref} className="relative overflow-hidden">
         <div
           className="absolute inset-0 scale-110"
@@ -434,7 +557,6 @@ function Landing() {
               </div>
             </div>
 
-            {/* CTA card */}
             <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-8" style={{ boxShadow: "var(--shadow-elegant)" }}>
               <div className="h-12 w-12 rounded-xl flex items-center justify-center mb-5" style={{ background: "var(--gradient-gold)" }}>
                 <Scissors className="h-6 w-6 text-primary-foreground" />
@@ -470,11 +592,12 @@ function Landing() {
             <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} Fade Factory OS — Built for barbers.</p>
             <div className="flex items-center gap-5 text-sm text-muted-foreground">
               <a href="#services" className="hover:text-foreground transition-colors">Services</a>
+              <a href="#styles" className="hover:text-foreground transition-colors">Styles</a>
               <a href="#team" className="hover:text-foreground transition-colors">Team</a>
               <Link to="/login" className="hover:text-foreground transition-colors">Log in</Link>
               <Link to="/signup" className="hover:text-foreground transition-colors">Sign up</Link>
-              <a href="#" aria-label="Instagram" className="hover:text-foreground transition-colors">
-                <Instagram className="h-4 w-4" />
+              <a href="#" aria-label="Social" className="hover:text-foreground transition-colors">
+                <Globe className="h-4 w-4" />
               </a>
             </div>
           </div>

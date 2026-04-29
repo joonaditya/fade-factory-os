@@ -10,7 +10,6 @@ import {
   Clock,
   ChevronRight,
   ChevronLeft,
-  Star,
   CheckCircle2,
   Calendar,
   User,
@@ -25,22 +24,23 @@ export const Route = createFileRoute("/booking")({
 });
 
 type Service = {
-  id: string;
+  service_id: string;
   name: string;
   price: number | null;
   description: string | null;
-  duration_min: number | null;
+  duration_mins: number | null;
   shop_id: string | null;
 };
 
 type Barber = {
   barber_id: string;
   name: string;
-  rating: number | null;
-  specialty: string | null;
+  bio: string | null;
   photo_url: string | null;
   shop_id: string | null;
 };
+
+const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
 function generateSlots(date: Date, durationMin: number, booked: string[]): Date[] {
   const slots: Date[] = [];
@@ -82,61 +82,36 @@ function BookingPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
 
-  // Resolve customer ID as soon as user is known
+  // Resolve customer ID as soon as user is known.
   useEffect(() => {
     if (!user) return;
-    const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
-    const resolve = async () => {
-      // 1. Try matching by user_id
-      const { data: byUserId } = await supabase
-        .from("customers")
-        .select("customer_id, id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const row1 = byUserId as any;
-      if (row1?.customer_id || row1?.id) {
-        setResolvedCustomerId(row1.customer_id ?? row1.id);
-        return;
-      }
 
-      // 2. Try matching by email
+    const resolve = async () => {
+      // 1. Lookup by email
       if (user.email) {
         const { data: byEmail } = await supabase
           .from("customers")
-          .select("customer_id, id")
+          .select("customer_id")
           .eq("email", user.email)
-          .maybeSingle();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const row2 = byEmail as any;
-        if (row2?.customer_id || row2?.id) {
-          setResolvedCustomerId(row2.customer_id ?? row2.id);
+          .maybeSingle<{ customer_id: string }>();
+        if (byEmail?.customer_id) {
+          setResolvedCustomerId(byEmail.customer_id);
           return;
         }
       }
 
-      // 3. Create a new customer using profile credentials
+      // 2. No row found — create one now
       const name = user.email?.split("@")[0] ?? "Customer";
       const { data: created, error: createErr } = await supabase
         .from("customers")
-        .insert({
-          name,
-          full_name: name,
-          email: user.email,
-          user_id: user.id,
-          phone: null,
-          shop_id: SHOP_ID,
-        })
-        .select("customer_id, id")
-        .single();
+        .insert({ name, email: user.email, phone: "", shop_id: SHOP_ID })
+        .select("customer_id")
+        .single<{ customer_id: string }>();
       if (createErr) {
         console.error("Customer create error:", createErr.message, createErr.details);
+        return;
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const row3 = created as any;
-      if (row3?.customer_id || row3?.id) {
-        setResolvedCustomerId(row3.customer_id ?? row3.id);
-      }
+      if (created?.customer_id) setResolvedCustomerId(created.customer_id);
     };
     resolve();
   }, [user]);
@@ -184,7 +159,7 @@ function BookingPage() {
         .gte("appt_datetime", dayStart)
         .lte("appt_datetime", dayEnd);
       const booked = (data ?? []).map((a: { appt_datetime: string }) => a.appt_datetime);
-      const duration = selectedService.duration_min ?? 30;
+      const duration = selectedService.duration_mins ?? 30;
       setSlots(generateSlots(selectedDate, duration, booked));
       setSlotsLoading(false);
     };
@@ -195,11 +170,9 @@ function BookingPage() {
     if (!selectedService || !selectedBarber || !selectedSlot || !user) return;
     setSubmitting(true);
 
-    const duration = selectedService.duration_min ?? 30;
+    const duration = selectedService.duration_mins ?? 30;
     const apptDatetime = selectedSlot.toISOString();
     const endDatetime = new Date(selectedSlot.getTime() + duration * 60000).toISOString();
-
-    const resolvedShopId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
     if (!resolvedCustomerId) {
       setSubmitting(false);
@@ -211,9 +184,9 @@ function BookingPage() {
       appt_datetime: apptDatetime,
       end_datetime: endDatetime,
       barber_id: selectedBarber.barber_id,
-      service_id: selectedService.id,
+      service_id: selectedService.service_id,
       customer_id: resolvedCustomerId,
-      shop_id: resolvedShopId,
+      shop_id: SHOP_ID,
       status: "confirmed",
       booking_channel: "website",
     });
@@ -335,7 +308,7 @@ function BookingPage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {services.map((svc) => (
                   <button
-                    key={svc.id}
+                    key={svc.service_id}
                     onClick={() => {
                       setSelectedService(svc);
                       setStep(2);
@@ -343,7 +316,7 @@ function BookingPage() {
                     className={cn(
                       "rounded-xl border p-5 text-left transition-all hover:border-primary/50",
                       "bg-card",
-                      selectedService?.id === svc.id
+                      selectedService?.service_id === svc.service_id
                         ? "border-primary ring-1 ring-primary bg-primary/5"
                         : "border-border/60 hover:bg-muted/30"
                     )}
@@ -368,10 +341,10 @@ function BookingPage() {
                         {svc.description}
                       </p>
                     )}
-                    {svc.duration_min != null && (
+                    {svc.duration_mins != null && (
                       <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2">
                         <Clock className="h-3 w-3" />
-                        {svc.duration_min} min
+                        {svc.duration_mins} min
                       </div>
                     )}
                   </button>
@@ -439,14 +412,8 @@ function BookingPage() {
                       </div>
                     )}
                     <p className="font-medium text-sm">{b.name}</p>
-                    {b.specialty && (
-                      <p className="text-[10px] text-primary mt-0.5">{b.specialty}</p>
-                    )}
-                    {b.rating != null && (
-                      <div className="flex items-center justify-center gap-0.5 text-[10px] text-muted-foreground mt-1">
-                        <Star className="h-2.5 w-2.5 text-primary fill-primary" />
-                        {Number(b.rating).toFixed(1)}
-                      </div>
+                    {b.bio && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{b.bio}</p>
                     )}
                   </button>
                 ))}
@@ -584,11 +551,11 @@ function BookingPage() {
                 label="Time"
                 value={format(selectedSlot, "h:mm a")}
               />
-              {selectedService.duration_min != null && (
+              {selectedService.duration_mins != null && (
                 <Row
                   icon={Clock}
                   label="Duration"
-                  value={`${selectedService.duration_min} min`}
+                  value={`${selectedService.duration_mins} min`}
                 />
               )}
             </div>

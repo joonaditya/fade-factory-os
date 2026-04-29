@@ -107,6 +107,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error("profile insert error", pErr);
           return { error: pErr.message, role: null };
         }
+        if (role === "customer") {
+          const name = email.split("@")[0];
+          const { error: cErr } = await supabase.from("customers").insert({
+            name,
+            email,
+            phone: "",
+            shop_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          });
+          if (cErr) {
+            console.error("customer insert error", cErr);
+          }
+        }
         if (data.session) {
           setProfile(await fetchProfile(newUser.id));
         }
