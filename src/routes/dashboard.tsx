@@ -120,10 +120,10 @@ function OwnerDashboard() {
       ] = await Promise.all([
         supabase
           .from("appointments")
-          .select("*")
+          .select("*, services(price)")
           .gte("appt_datetime", fourWeeksAgo)
           .order("appt_datetime", { ascending: false }),
-        supabase.from("services").select("id,name,price"),
+        supabase.from("services").select("service_id,name,price"),
         supabase.from("barbers").select("barber_id,name"),
         supabase
           .from("agent_logs")
@@ -138,8 +138,8 @@ function OwnerDashboard() {
 
       setAppointments((apptsRes.data ?? []) as Appointment[]);
       const sMap: Record<string, { name: string; price: number }> = {};
-      (servicesRes.data ?? []).forEach((s: { id: string; name: string; price: number }) => {
-        sMap[s.id] = { name: s.name, price: Number(s.price) || 0 };
+      (servicesRes.data ?? []).forEach((s: { service_id: string; name: string; price: number }) => {
+        sMap[s.service_id] = { name: s.name, price: Number(s.price) || 0 };
       });
       setServices(sMap);
       const bMap: Record<string, string> = {};
@@ -163,8 +163,8 @@ function OwnerDashboard() {
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
     const lastWeekStart = subWeeks(new Date(weekStart), 1).toISOString();
 
-    const priceFor = (a: Appointment) =>
-      Number(a.price ?? (a.service_id ? services[a.service_id]?.price : 0) ?? 0);
+    const priceFor = (a: Appointment & { services?: { price: number } | null }) =>
+      Number(a.price ?? a.services?.price ?? (a.service_id ? services[a.service_id]?.price : 0) ?? 0);
 
     const todayConfirmed = appointments.filter(
       (a) =>

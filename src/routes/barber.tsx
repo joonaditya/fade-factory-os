@@ -35,7 +35,7 @@ export const Route = createFileRoute("/barber")({
 
 type Barber = { barber_id: string; name: string; rating?: number | null };
 type Customer = { id: string; name?: string | null; full_name?: string | null };
-type Service = { id: string; name: string; price: number | null };
+type Service = { service_id: string; name: string; price: number | null };
 type Appointment = {
   appt_id: string;
   customer_id: string | null;
@@ -98,19 +98,19 @@ function BarberDashboard() {
       const [apptsRes, customersRes, servicesRes] = await Promise.all([
         supabase
           .from("appointments")
-          .select("*")
+          .select("*, services(price)")
           .eq("barber_id", selected)
           .gte("appt_datetime", weekStart)
           .order("appt_datetime", { ascending: true }),
         supabase.from("customers").select("id,name,full_name"),
-        supabase.from("services").select("id,name,price"),
+        supabase.from("services").select("service_id,name,price"),
       ]);
       setAppointments((apptsRes.data ?? []) as Appointment[]);
       const cMap: Record<string, Customer> = {};
       (customersRes.data ?? []).forEach((c: Customer) => (cMap[c.id] = c));
       setCustomers(cMap);
       const sMap: Record<string, Service> = {};
-      (servicesRes.data ?? []).forEach((s: Service) => (sMap[s.id] = s));
+      (servicesRes.data ?? []).forEach((s: Service) => (sMap[s.service_id] = s));
       setServices(sMap);
       setLoading(false);
     })();
@@ -128,8 +128,8 @@ function BarberDashboard() {
   }, [appointments]);
 
   const stats = useMemo(() => {
-    const priceFor = (a: Appointment) =>
-      Number(a.price ?? (a.service_id ? services[a.service_id]?.price : 0) ?? 0);
+    const priceFor = (a: Appointment & { services?: { price: number } | null }) =>
+      Number(a.price ?? a.services?.price ?? (a.service_id ? services[a.service_id]?.price : 0) ?? 0);
     const weekRevenue = appointments
       .filter((a) => ["confirmed", "completed"].includes((a.status ?? "").toLowerCase()))
       .reduce((s, a) => s + priceFor(a), 0);

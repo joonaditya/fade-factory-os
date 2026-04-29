@@ -25,7 +25,7 @@ export const Route = createFileRoute("/booking")({
 });
 
 type Service = {
-  id: string;
+  service_id: string;
   name: string;
   price: number | null;
   description: string | null;
@@ -75,6 +75,7 @@ function BookingPage() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [resolvedCustomerId, setResolvedCustomerId] = useState<string | null>(null);
+  const [customerResolveError, setCustomerResolveError] = useState<string | null>(null);
 
   // Selections
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -88,11 +89,12 @@ function BookingPage() {
     const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
     const resolve = async () => {
       // 1. Try matching by user_id
-      const { data: byUserId } = await supabase
+      const { data: byUserId, error: e1 } = await supabase
         .from("customers")
         .select("customer_id, id")
         .eq("user_id", user.id)
         .maybeSingle();
+      if (e1) console.error("customers lookup by user_id:", e1.message);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const row1 = byUserId as any;
       if (row1?.customer_id || row1?.id) {
@@ -102,11 +104,12 @@ function BookingPage() {
 
       // 2. Try matching by email
       if (user.email) {
-        const { data: byEmail } = await supabase
+        const { data: byEmail, error: e2 } = await supabase
           .from("customers")
           .select("customer_id, id")
           .eq("email", user.email)
           .maybeSingle();
+        if (e2) console.error("customers lookup by email:", e2.message);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const row2 = byEmail as any;
         if (row2?.customer_id || row2?.id) {
@@ -130,7 +133,9 @@ function BookingPage() {
         .select("customer_id, id")
         .single();
       if (createErr) {
-        console.error("Customer create error:", createErr.message, createErr.details);
+        console.error("Customer create error:", createErr.message, createErr.details, createErr.hint);
+        setCustomerResolveError(createErr.message);
+        return;
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const row3 = created as any;
@@ -203,7 +208,11 @@ function BookingPage() {
 
     if (!resolvedCustomerId) {
       setSubmitting(false);
-      toast.error("Could not set up your customer profile. Please try logging out and back in.");
+      toast.error(
+        customerResolveError
+          ? `Could not create customer profile: ${customerResolveError}`
+          : "Could not set up your customer profile. Please try logging out and back in."
+      );
       return;
     }
 
@@ -211,11 +220,12 @@ function BookingPage() {
       appt_datetime: apptDatetime,
       end_datetime: endDatetime,
       barber_id: selectedBarber.barber_id,
-      service_id: selectedService.id,
+      service_id: selectedService.service_id,
       customer_id: resolvedCustomerId,
       shop_id: resolvedShopId,
       status: "confirmed",
       booking_channel: "website",
+      price: selectedService.price,
     });
 
     setSubmitting(false);
@@ -335,7 +345,7 @@ function BookingPage() {
               <div className="grid sm:grid-cols-2 gap-3">
                 {services.map((svc) => (
                   <button
-                    key={svc.id}
+                    key={svc.service_id}
                     onClick={() => {
                       setSelectedService(svc);
                       setStep(2);
@@ -343,7 +353,7 @@ function BookingPage() {
                     className={cn(
                       "rounded-xl border p-5 text-left transition-all hover:border-primary/50",
                       "bg-card",
-                      selectedService?.id === svc.id
+                      selectedService?.service_id === svc.service_id
                         ? "border-primary ring-1 ring-primary bg-primary/5"
                         : "border-border/60 hover:bg-muted/30"
                     )}
