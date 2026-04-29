@@ -74,11 +74,72 @@ function BookingPage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resolvedCustomerId, setResolvedCustomerId] = useState<string | null>(null);
+
   // Selections
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
+
+  // Resolve customer ID as soon as user is known
+  useEffect(() => {
+    if (!user) return;
+    const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    const resolve = async () => {
+      // 1. Try matching by user_id
+      const { data: byUserId } = await supabase
+        .from("customers")
+        .select("customer_id, id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const row1 = byUserId as any;
+      if (row1?.customer_id || row1?.id) {
+        setResolvedCustomerId(row1.customer_id ?? row1.id);
+        return;
+      }
+
+      // 2. Try matching by email
+      if (user.email) {
+        const { data: byEmail } = await supabase
+          .from("customers")
+          .select("customer_id, id")
+          .eq("email", user.email)
+          .maybeSingle();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row2 = byEmail as any;
+        if (row2?.customer_id || row2?.id) {
+          setResolvedCustomerId(row2.customer_id ?? row2.id);
+          return;
+        }
+      }
+
+      // 3. Create a new customer using profile credentials
+      const name = user.email?.split("@")[0] ?? "Customer";
+      const { data: created, error: createErr } = await supabase
+        .from("customers")
+        .insert({
+          name,
+          full_name: name,
+          email: user.email,
+          user_id: user.id,
+          phone: null,
+          shop_id: SHOP_ID,
+        })
+        .select("customer_id, id")
+        .single();
+      if (createErr) {
+        console.error("Customer create error:", createErr.message, createErr.details);
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const row3 = created as any;
+      if (row3?.customer_id || row3?.id) {
+        setResolvedCustomerId(row3.customer_id ?? row3.id);
+      }
+    };
+    resolve();
+  }, [user]);
 
   useEffect(() => {
     const load = async () => {
@@ -140,23 +201,10 @@ function BookingPage() {
 
     const resolvedShopId = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
-    // Find or create a customer record for this auth user
-    let customerId: string | null = null;
-    const { data: existingCustomer } = await supabase
-      .from("customers")
-      .select("customer_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (existingCustomer?.customer_id) {
-      customerId = existingCustomer.customer_id;
-    } else {
-      const { data: newCustomer } = await supabase
-        .from("customers")
-        .insert({ user_id: user.id, name: user.email, shop_id: resolvedShopId })
-        .select("customer_id")
-        .single();
-      customerId = newCustomer?.customer_id ?? null;
+    if (!resolvedCustomerId) {
+      setSubmitting(false);
+      toast.error("Could not set up your customer profile. Please try logging out and back in.");
+      return;
     }
 
     const { error } = await supabase.from("appointments").insert({
@@ -164,7 +212,7 @@ function BookingPage() {
       end_datetime: endDatetime,
       barber_id: selectedBarber.barber_id,
       service_id: selectedService.id,
-      customer_id: customerId,
+      customer_id: resolvedCustomerId,
       shop_id: resolvedShopId,
       status: "confirmed",
       booking_channel: "website",
