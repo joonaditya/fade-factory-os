@@ -76,6 +76,8 @@ function BookingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [resolvedCustomerId, setResolvedCustomerId] = useState<string | null>(null);
   const [customerResolveError, setCustomerResolveError] = useState<string | null>(null);
+  const [phone, setPhone] = useState<string>("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   // Selections
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -83,62 +85,69 @@ function BookingPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
 
-  // Resolve customer ID as soon as user is known.
+  // Resolve customer ID when phone is provided and user is known.
   useEffect(() => {
-    if (!user) return;
+    if (!user || !phone || phone.length < 6) return;
     const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
     const resolve = async () => {
-      // 1. Try matching by user_id
-      const { data: byUserId, error: e1 } = await supabase
+      // 1. Try matching by shop_id and phone
+      const { data: byPhone, error: e1 } = await supabase
         .from("customers")
-        .select("customer_id, id")
-        .eq("user_id", user.id)
+        .select("customer_id")
+        .eq("shop_id", SHOP_ID)
+        .eq("phone", phone)
         .maybeSingle();
-      if (e1) console.error("customers lookup by user_id:", e1.message);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const row1 = byUserId as any;
-      if (row1?.customer_id || row1?.id) {
-        setResolvedCustomerId(row1.customer_id ?? row1.id);
+
+      if (e1) {
+        console.error("customers lookup by phone:", e1.message);
+        setCustomerResolveError(e1.message);
+        setResolvedCustomerId(null);
         return;
       }
 
-    const resolve = async () => {
-      // 1. Lookup by email
-      if (user.email) {
-        const { data: byEmail, error: e2 } = await supabase
-          .from("customers")
-          .select("customer_id")
-          .eq("email", user.email)
-          .maybeSingle();
-        if (e2) console.error("customers lookup by email:", e2.message);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const row2 = byEmail as any;
-        if (row2?.customer_id || row2?.id) {
-          setResolvedCustomerId(row2.customer_id ?? row2.id);
-          .maybeSingle<{ customer_id: string }>();
-        if (byEmail?.customer_id) {
-          setResolvedCustomerId(byEmail.customer_id);
-          return;
-        }
+      const row1 = byPhone as any;
+
+      if (row1?.customer_id) {
+        setResolvedCustomerId(row1.customer_id);
+        setCustomerResolveError(null);
+        return;
       }
 
       // 2. No row found — create one now
-      const name = user.email?.split("@")[0] ?? "Customer";
+      const name = user.email?.split("@")?.[0] ?? "Customer";
       const { data: created, error: createErr } = await supabase
         .from("customers")
-        .insert({ name, email: user.email, phone: "", shop_id: SHOP_ID })
+        .insert({ name, email: user.email, phone, shop_id: SHOP_ID })
         .select("customer_id")
         .single<{ customer_id: string }>();
       if (createErr) {
-        console.error("Customer create error:", createErr.message, createErr.details, createErr.hint);
-        setCustomerResolveError(createErr.message);
-        console.error("Customer create error:", createErr.message, createErr.details);
+        // If duplicate key error, try to fetch the customer again (race condition safety)
+        if (createErr.message && createErr.message.includes('duplicate key value')) {
+          const { data: retry, error: retryErr } = await supabase
+            .from("customers")
+            .select("customer_id")
+            .eq("shop_id", SHOP_ID)
+            .eq("phone", phone)
+            .maybeSingle();
+          if (retry && retry.customer_id) {
+            setResolvedCustomerId(retry.customer_id);
+            setCustomerResolveError(null);
+            return;
+          }
+          setCustomerResolveError("Duplicate phone, but could not resolve customer.");
+        } else {
+          setCustomerResolveError(createErr.message);
+        }
+        setResolvedCustomerId(null);
         return;
       }
-      if (created?.customer_id) setResolvedCustomerId(created.customer_id);
+      if (created?.customer_id) {
+        setResolvedCustomerId(created.customer_id);
+        setCustomerResolveError(null);
+      }
     };
     resolve();
-  }, [user]);
+  }, [user, phone]);
 
   useEffect(() => {
     const load = async () => {
@@ -217,7 +226,6 @@ function BookingPage() {
       shop_id: SHOP_ID,
       status: "confirmed",
       booking_channel: "website",
-      price: selectedService.price,
     });
 
     setSubmitting(false);
@@ -587,13 +595,42 @@ function BookingPage() {
                   value={`${selectedService.duration_mins} min`}
                 />
               )}
+              {/* Phone input */}
+              <div className="flex flex-col gap-1 mt-4">
+                <label htmlFor="phone" className="font-medium text-sm">
+                  Phone Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  className="border rounded px-3 py-2 text-base"
+                  value={phone}
+                  onChange={e => {
+                    setPhone(e.target.value);
+                    setPhoneError(null);
+                  }}
+                  placeholder="Enter your phone number"
+                  required
+                  pattern="[0-9\-\+ ]{6,}"
+                  maxLength={20}
+                />
+                {phoneError && <span className="text-red-500 text-xs">{phoneError}</span>}
+              </div>
             </div>
 
             <Button
               className="w-full"
               size="lg"
-              onClick={handleConfirm}
-              disabled={submitting}
+              onClick={() => {
+                // Validate phone before confirming
+                if (!phone || phone.length < 6) {
+                  setPhoneError("Please enter a valid phone number.");
+                  return;
+                }
+                setPhoneError(null);
+                handleConfirm();
+              }}
+              disabled={submitting || !phone || phone.length < 6}
               style={{ boxShadow: "var(--shadow-gold)" }}
             >
               {submitting ? (
