@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { DashboardShell } from "@/components/DashboardShell";
 import { StatCard } from "@/components/StatCard";
+import { AvailabilityManager } from "@/components/AvailabilityManager";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import {
   DollarSign,
@@ -25,7 +27,7 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { format, startOfWeek, subWeeks, startOfDay, endOfDay } from "date-fns";
+import { format, startOfWeek, subWeeks, startOfDay, endOfDay, startOfMonth } from "date-fns";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({ meta: [{ title: "Owner Dashboard — Fade Factory OS" }] }),
@@ -102,6 +104,8 @@ function OwnerDashboard() {
   const [revenuePerBarber, setRevenuePerBarber] = useState<RevenuePerBarberRow[]>([]);
   const [peakHours, setPeakHours] = useState<PeakHourRow[]>([]);
   const [dueCustomers, setDueCustomers] = useState<DueCustomer[]>([]);
+  const [revenuePeriod, setRevenuePeriod] = useState<"today" | "week" | "month">("today");
+  const [availBarber, setAvailBarber] = useState<string>("");
 
   useEffect(() => {
     const load = async () => {
@@ -147,6 +151,8 @@ function OwnerDashboard() {
         bMap[b.barber_id] = b.name;
       });
       setBarbers(bMap);
+      const firstId = Object.keys(bMap)[0];
+      if (firstId) setAvailBarber((prev) => prev || firstId);
       setAgentLogs((logsRes.data ?? []) as AgentLog[]);
       setChannels((chRes.data ?? []) as ChannelRow[]);
       setRevenuePerBarber((rpbRes.data ?? []) as RevenuePerBarberRow[]);
@@ -162,23 +168,59 @@ function OwnerDashboard() {
     const todayEnd = endOfDay(new Date()).toISOString();
     const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
     const lastWeekStart = subWeeks(new Date(weekStart), 1).toISOString();
+    const monthStart = startOfMonth(new Date()).toISOString();
 
     const priceFor = (a: Appointment & { services?: { price: number } | null }) =>
       Number(a.price ?? a.services?.price ?? (a.service_id ? services[a.service_id]?.price : 0) ?? 0);
 
-    const todayConfirmed = appointments.filter(
-      (a) =>
-        a.appt_datetime >= todayStart &&
-        a.appt_datetime <= todayEnd &&
-        ["confirmed", "completed"].includes((a.status ?? "").toLowerCase())
+    // Period-based filters
+    const todayAppts = appointments.filter(
+      (a) => a.appt_datetime >= todayStart && a.appt_datetime <= todayEnd
     );
-    const todayRevenue = todayConfirmed.reduce((s, a) => s + priceFor(a), 0);
-
     const thisWeek = appointments.filter((a) => a.appt_datetime >= weekStart);
+    const thisMonth = appointments.filter((a) => a.appt_datetime >= monthStart);
     const lastWeek = appointments.filter(
       (a) => a.appt_datetime >= lastWeekStart && a.appt_datetime < weekStart
     );
 
+    // Helper to get stats for a period
+    const getStatsForPeriod = (appts: Appointment[]) => {
+      const revenue = appts
+        .filter((a) => ["confirmed", "completed"].includes((a.status ?? "").toLowerCase()))
+        .reduce((s, a) => s + priceFor(a), 0);
+      const completed = appts.filter((a) =>
+        ["completed"].includes((a.status ?? "").toLowerCase())
+      ).length;
+      const avgValue = appts.length > 0 ? revenue / appts.length : 0;
+      
+      // Repeat customers for this period
+      const customerCounts = new Map<string, number>();
+      appts.forEach((appt) => {
+        const key = appt.customer_id;
+        if (!key) return;
+        customerCounts.set(key, (customerCounts.get(key) ?? 0) + 1);
+      });
+      const repeatCustomers = Array.from(customerCounts.values()).filter((count) => count > 1).length;
+
+      // Top services for this period
+      const serviceCounts = new Map<string, number>();
+      appts.forEach((a) => {
+        const name = a.service_id ? services[a.service_id]?.name ?? a.service_id : "Unknown service";
+        serviceCounts.set(name, (serviceCounts.get(name) ?? 0) + 1);
+      });
+      const topServices = Array.from(serviceCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name, count]) => ({ name, count }));
+
+      return { revenue, completed, avgValue, repeatCustomers, topServices, count: appts.length };
+    };
+
+    const todayStats = getStatsForPeriod(todayAppts);
+    const weekStats = getStatsForPeriod(thisWeek);
+    const monthStats = getStatsForPeriod(thisMonth);
+
+    // Overall metrics
     const total = appointments.length;
     const noShows = appointments.filter((a) =>
       ["no-show", "no_show", "noshow", "cancelled", "canceled"].includes(
@@ -192,7 +234,38 @@ function OwnerDashboard() {
         ? null
         : ((thisWeek.length - lastWeek.length) / lastWeek.length) * 100;
 
-    return { todayRevenue, thisWeek: thisWeek.length, lastWeek: lastWeek.length, noShowRate, wow };
+    return {
+      // Today
+      todayRevenue: todayStats.revenue,
+      todayBookings: todayStats.count,
+      todayCompleted: todayStats.completed,
+      todayAvgValue: todayStats.avgValue,
+      todayRepeatCustomers: todayStats.repeatCustomers,
+      todayTopServices: todayStats.topServices,
+      // Week
+      weekRevenue: weekStats.revenue,
+      weekBookings: weekStats.count,
+      weekCompleted: weekStats.completed,
+      weekAvgValue: weekStats.avgValue,
+      weekRepeatCustomers: weekStats.repeatCustomers,
+      weekTopServices: weekStats.topServices,
+      weekNoShows: thisWeek.filter((a) =>
+        ["no-show", "no_show", "noshow", "cancelled", "canceled"].includes(
+          (a.status ?? "").toLowerCase()
+        )
+      ).length,
+      // Month
+      monthRevenue: monthStats.revenue,
+      monthBookings: monthStats.count,
+      monthCompleted: monthStats.completed,
+      monthAvgValue: monthStats.avgValue,
+      monthRepeatCustomers: monthStats.repeatCustomers,
+      monthTopServices: monthStats.topServices,
+      // Overall
+      noShowRate,
+      wow,
+      lastWeekBookings: lastWeek.length,
+    };
   }, [appointments, services]);
 
   const channelData = useMemo(() => {
@@ -263,34 +336,106 @@ function OwnerDashboard() {
     );
   }
 
+  const bookingCounts: Record<"today" | "week" | "month", number> = {
+    today: stats.todayBookings,
+    week: stats.weekBookings,
+    month: stats.monthBookings,
+  };
+
+  const completedCounts: Record<"today" | "week" | "month", number> = {
+    today: stats.todayCompleted,
+    week: stats.weekCompleted,
+    month: stats.monthCompleted,
+  };
+
+  const avgBookingValues: Record<"today" | "week" | "month", number> = {
+    today: stats.todayAvgValue,
+    week: stats.weekAvgValue,
+    month: stats.monthAvgValue,
+  };
+
+  const repeatCustomerCounts: Record<"today" | "week" | "month", number> = {
+    today: stats.todayRepeatCustomers,
+    week: stats.weekRepeatCustomers,
+    month: stats.monthRepeatCustomers,
+  };
+
+  const topServicesData: Record<"today" | "week" | "month", typeof stats.todayTopServices> = {
+    today: stats.todayTopServices,
+    week: stats.weekTopServices,
+    month: stats.monthTopServices,
+  };
+
+  const lastWeekHint = {
+    today: "No comparison",
+    week: `Last week: ${stats.lastWeekBookings}`,
+    month: "Month average",
+  };
+
+  const periodLabels: Record<"today" | "week" | "month", string> = {
+    today: "Today",
+    week: "This Week",
+    month: "This Month",
+  };
+
+  const revenueLabels: Record<"today" | "week" | "month", string> = {
+    today: "Today's Revenue",
+    week: "This Week's Revenue",
+    month: "This Month's Revenue",
+  };
+  const revenueValues: Record<"today" | "week" | "month", number> = {
+    today: stats.todayRevenue,
+    week: stats.weekRevenue,
+    month: stats.monthRevenue,
+  };
+
   return (
     <div className="p-8 space-y-6">
       <header>
-        <p className="text-primary text-xs font-medium uppercase tracking-widest">Agent 6</p>
-        <h1 className="font-display text-3xl font-bold">Owner Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {format(new Date(), "EEEE, MMMM d, yyyy")}
-        </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-primary text-xs font-medium uppercase tracking-widest">Agent 6</p>
+            <h1 className="font-display text-3xl font-bold">Owner Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {format(new Date(), "EEEE, MMMM d, yyyy")}
+            </p>
+          </div>
+          <div className="min-w-[200px]">
+            <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+              Revenue period
+            </label>
+            <Select value={revenuePeriod} onValueChange={(value) => setRevenuePeriod(value as "today" | "week" | "month") }>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="week">This Week</SelectItem>
+                <SelectItem value="month">This Month</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </header>
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Today's Revenue"
-          value={`$${stats.todayRevenue.toFixed(0)}`}
+          label={revenueLabels[revenuePeriod]}
+          value={`$${revenueValues[revenuePeriod].toFixed(0)}`}
           icon={DollarSign}
           hint="Confirmed + completed"
         />
         <StatCard
-          label="Bookings This Week"
-          value={String(stats.thisWeek)}
+          label={`Bookings ${periodLabels[revenuePeriod]}`}
+          value={String(bookingCounts[revenuePeriod])}
           icon={CalendarCheck}
           trend={
-            stats.wow !== null
+            revenuePeriod === "week" && stats.wow !== null
               ? { value: `${stats.wow.toFixed(0)}% vs last week`, positive: stats.wow >= 0 }
               : undefined
           }
-          hint={`Last week: ${stats.lastWeek}`}
+          hint={lastWeekHint[revenuePeriod]}
         />
         <StatCard
           label="No-Show Rate"
@@ -299,11 +444,46 @@ function OwnerDashboard() {
           hint="Cancelled or no-show / total"
         />
         <StatCard
-          label="Agent Activity"
-          value={String(agentLogs.length)}
+          label="Avg Booking Value"
+          value={`$${avgBookingValues[revenuePeriod].toFixed(0)}`}
           icon={Activity}
-          hint="Recent events"
+          hint={`${periodLabels[revenuePeriod]} average`}
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard
+          label={`Completed ${periodLabels[revenuePeriod]}`}
+          value={String(completedCounts[revenuePeriod])}
+          icon={CalendarCheck}
+          hint="Finished appointments"
+        />
+        <StatCard
+          label={`Repeat Customers ${periodLabels[revenuePeriod]}`}
+          value={String(repeatCustomerCounts[revenuePeriod])}
+          icon={UserPlus}
+          hint="Customers with multiple visits"
+        />
+        <div
+          className="rounded-xl border border-border/60 bg-card p-5"
+          style={{ boxShadow: "var(--shadow-elegant)" }}
+        >
+          <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-3">
+            Top Services {periodLabels[revenuePeriod]}
+          </p>
+          {topServicesData[revenuePeriod].length === 0 ? (
+            <p className="text-sm text-muted-foreground">No services booked yet</p>
+          ) : (
+            <div className="space-y-3">
+              {topServicesData[revenuePeriod].map((service) => (
+                <div key={service.name} className="flex items-center justify-between">
+                  <p className="font-medium truncate">{service.name}</p>
+                  <p className="text-sm text-muted-foreground">{service.count} bookings</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Charts row */}
@@ -380,44 +560,70 @@ function OwnerDashboard() {
         </Card>
       </div>
 
-      {/* Heatmap */}
-      <Card title="Peak Hours">
-        <div className="overflow-x-auto">
-          <div className="inline-block min-w-full">
-            <div className="flex gap-1 mb-1 ml-10">
-              {Array.from({ length: 24 }).map((_, h) => (
-                <div
-                  key={h}
-                  className="w-6 text-[10px] text-center text-muted-foreground"
-                >
-                  {h % 3 === 0 ? h : ""}
+      {/* Heatmap + Availability side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card title="Peak Hours">
+          <div className="overflow-x-auto">
+            <div className="inline-block min-w-full">
+              <div className="flex gap-1 mb-1 ml-10">
+                {Array.from({ length: 24 }).map((_, h) => (
+                  <div
+                    key={h}
+                    className="w-6 text-[10px] text-center text-muted-foreground"
+                  >
+                    {h % 3 === 0 ? h : ""}
+                  </div>
+                ))}
+              </div>
+              {heatmap.grid.map((row, dayIdx) => (
+                <div key={dayIdx} className="flex gap-1 mb-1 items-center">
+                  <div className="w-10 text-xs text-muted-foreground">{DAY_LABELS[dayIdx]}</div>
+                  {row.map((v, h) => {
+                    const intensity = v / heatmap.max;
+                    return (
+                      <div
+                        key={h}
+                        title={`${DAY_LABELS[dayIdx]} ${h}:00 — ${v} bookings`}
+                        className="w-6 h-6 rounded-sm border border-border/30"
+                        style={{
+                          background:
+                            v === 0
+                              ? "oklch(0.22 0.014 55)"
+                              : `oklch(0.78 0.14 80 / ${0.15 + intensity * 0.85})`,
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               ))}
             </div>
-            {heatmap.grid.map((row, dayIdx) => (
-              <div key={dayIdx} className="flex gap-1 mb-1 items-center">
-                <div className="w-10 text-xs text-muted-foreground">{DAY_LABELS[dayIdx]}</div>
-                {row.map((v, h) => {
-                  const intensity = v / heatmap.max;
-                  return (
-                    <div
-                      key={h}
-                      title={`${DAY_LABELS[dayIdx]} ${h}:00 — ${v} bookings`}
-                      className="w-6 h-6 rounded-sm border border-border/30"
-                      style={{
-                        background:
-                          v === 0
-                            ? "oklch(0.22 0.014 55)"
-                            : `oklch(0.78 0.14 80 / ${0.15 + intensity * 0.85})`,
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            ))}
           </div>
-        </div>
-      </Card>
+        </Card>
+
+        <Card title="Barber Availability">
+          <div className="mb-4">
+            <label className="text-xs text-muted-foreground uppercase tracking-wider mb-1.5 block">
+              Select barber
+            </label>
+            <Select value={availBarber} onValueChange={setAvailBarber}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a barber" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(barbers).map(([id, name]) => (
+                  <SelectItem key={id} value={id}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {availBarber && (
+            <AvailabilityManager
+              barberId={availBarber}
+              barberName={barbers[availBarber] ?? ""}
+            />
+          )}
+        </Card>
+      </div>
 
       {/* Bottom row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
