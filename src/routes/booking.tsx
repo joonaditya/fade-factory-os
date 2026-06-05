@@ -42,15 +42,26 @@ type Barber = {
 
 const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
-function generateSlots(date: Date, durationMin: number, booked: string[]): Date[] {
+type BookedAppointment = { appt_datetime: string; end_datetime: string | null };
+
+function generateSlots(date: Date, durationMin: number, booked: BookedAppointment[]): Date[] {
   const slots: Date[] = [];
-  const bookedSet = new Set(booked.map((b) => new Date(b).toISOString()));
+  const durationMs = durationMin * 60_000;
+  const bookedRanges = booked.map((b) => ({
+    start: new Date(b.appt_datetime).getTime(),
+    end: b.end_datetime
+      ? new Date(b.end_datetime).getTime()
+      : new Date(b.appt_datetime).getTime() + durationMs,
+  }));
+
   for (let h = 9; h < 18; h++) {
     for (let m = 0; m < 60; m += durationMin) {
       const slot = new Date(date.getFullYear(), date.getMonth(), date.getDate(), h, m);
-      if (slot > new Date() && !bookedSet.has(slot.toISOString())) {
-        slots.push(slot);
-      }
+      if (slot <= new Date()) continue;
+      const slotStart = slot.getTime();
+      const slotEnd = slotStart + durationMs;
+      const overlaps = bookedRanges.some((r) => slotStart < r.end && slotEnd > r.start);
+      if (!overlaps) slots.push(slot);
     }
   }
   return slots;
@@ -176,6 +187,21 @@ function BookingPage() {
     }
     setSlotsLoading(true);
     const load = async () => {
+      const dateStr = format(selectedDate, "yyyy-MM-dd");
+
+      const { data: availData } = await supabase
+        .from("barber_availability")
+        .select("is_day_off")
+        .eq("barber_id", selectedBarber.barber_id)
+        .eq("date", dateStr)
+        .maybeSingle();
+
+      if (availData?.is_day_off) {
+        setSlots([]);
+        setSlotsLoading(false);
+        return;
+      }
+
       const dayStart = startOfDay(selectedDate).toISOString();
       const dayEnd = new Date(
         selectedDate.getFullYear(),
@@ -187,11 +213,11 @@ function BookingPage() {
       ).toISOString();
       const { data } = await supabase
         .from("appointments")
-        .select("appt_datetime")
+        .select("appt_datetime, end_datetime")
         .eq("barber_id", selectedBarber.barber_id)
         .gte("appt_datetime", dayStart)
         .lte("appt_datetime", dayEnd);
-      const booked = (data ?? []).map((a: { appt_datetime: string }) => a.appt_datetime);
+      const booked = (data ?? []) as BookedAppointment[];
       const duration = selectedService.duration_mins ?? 30;
       setSlots(generateSlots(selectedDate, duration, booked));
       setSlotsLoading(false);
