@@ -89,12 +89,31 @@ function BookingPage() {
   const [customerResolveError, setCustomerResolveError] = useState<string | null>(null);
   const [phone, setPhone] = useState<string>("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [phoneLocked, setPhoneLocked] = useState(false);
 
   // Selections
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
+
+  // Pre-fill phone from the customer's stored record.
+  useEffect(() => {
+    if (!user) return;
+    const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+    supabase
+      .from("customers")
+      .select("phone")
+      .eq("shop_id", SHOP_ID)
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.phone && data.phone.length > 0) {
+          setPhone(data.phone);
+          setPhoneLocked(true);
+        }
+      });
+  }, [user]);
 
   // Resolve customer ID when phone is provided and user is known.
   useEffect(() => {
@@ -629,18 +648,24 @@ function BookingPage() {
                 <input
                   id="phone"
                   type="tel"
-                  className="border rounded px-3 py-2 text-base"
+                  className={`border rounded px-3 py-2 text-base ${phoneLocked ? "bg-muted text-muted-foreground cursor-not-allowed" : ""}`}
                   value={phone}
                   onChange={e => {
+                    if (phoneLocked) return;
                     setPhone(e.target.value);
                     setPhoneError(null);
                   }}
+                  readOnly={phoneLocked}
                   placeholder="Enter your phone number"
                   required
                   pattern="[0-9\-\+ ]{6,}"
                   maxLength={20}
                 />
-                {phoneError && <span className="text-red-500 text-xs">{phoneError}</span>}
+                {phoneLocked ? (
+                  <span className="text-xs text-muted-foreground">This is the number on your account.</span>
+                ) : (
+                  phoneError && <span className="text-red-500 text-xs">{phoneError}</span>
+                )}
               </div>
             </div>
 

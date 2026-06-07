@@ -11,7 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InviteRouteImport } from './routes/invite'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as CustomerRouteImport } from './routes/customer'
 import { Route as BookingRouteImport } from './routes/booking'
 import { Route as BarberRouteImport } from './routes/barber'
 import { Route as IndexRouteImport } from './routes/index'
@@ -26,9 +28,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CustomerRoute = CustomerRouteImport.update({
+  id: '/customer',
+  path: '/customer',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingRoute = BookingRouteImport.update({
@@ -51,7 +63,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/barber': typeof BarberRoute
   '/booking': typeof BookingRoute
+  '/customer': typeof CustomerRoute
   '/dashboard': typeof DashboardRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
 }
@@ -59,7 +73,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/barber': typeof BarberRoute
   '/booking': typeof BookingRoute
+  '/customer': typeof CustomerRoute
   '/dashboard': typeof DashboardRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
 }
@@ -68,21 +84,41 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/barber': typeof BarberRoute
   '/booking': typeof BookingRoute
+  '/customer': typeof CustomerRoute
   '/dashboard': typeof DashboardRoute
+  '/invite': typeof InviteRoute
   '/login': typeof LoginRoute
   '/signup': typeof SignupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/barber' | '/booking' | '/dashboard' | '/login' | '/signup'
+  fullPaths:
+    | '/'
+    | '/barber'
+    | '/booking'
+    | '/customer'
+    | '/dashboard'
+    | '/invite'
+    | '/login'
+    | '/signup'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/barber' | '/booking' | '/dashboard' | '/login' | '/signup'
+  to:
+    | '/'
+    | '/barber'
+    | '/booking'
+    | '/customer'
+    | '/dashboard'
+    | '/invite'
+    | '/login'
+    | '/signup'
   id:
     | '__root__'
     | '/'
     | '/barber'
     | '/booking'
+    | '/customer'
     | '/dashboard'
+    | '/invite'
     | '/login'
     | '/signup'
   fileRoutesById: FileRoutesById
@@ -91,7 +127,9 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BarberRoute: typeof BarberRoute
   BookingRoute: typeof BookingRoute
+  CustomerRoute: typeof CustomerRoute
   DashboardRoute: typeof DashboardRoute
+  InviteRoute: typeof InviteRoute
   LoginRoute: typeof LoginRoute
   SignupRoute: typeof SignupRoute
 }
@@ -112,11 +150,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/customer': {
+      id: '/customer'
+      path: '/customer'
+      fullPath: '/customer'
+      preLoaderRoute: typeof CustomerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/booking': {
@@ -147,7 +199,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BarberRoute: BarberRoute,
   BookingRoute: BookingRoute,
+  CustomerRoute: CustomerRoute,
   DashboardRoute: DashboardRoute,
+  InviteRoute: InviteRoute,
   LoginRoute: LoginRoute,
   SignupRoute: SignupRoute,
 }

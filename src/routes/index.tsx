@@ -392,48 +392,6 @@ function Landing() {
         </div>
       </section>
 
-      {/* ── Haircut Styles Lookbook ── */}
-      <section id="styles" className="container mx-auto px-6 py-24">
-        <div className="text-center mb-12">
-          <p className="text-primary text-xs font-medium uppercase tracking-widest mb-3">The Lookbook</p>
-          <h2 className="font-display text-4xl font-bold">Haircuts for Men</h2>
-          <p className="text-muted-foreground mt-3 max-w-xl mx-auto text-sm">
-            Short layers, bald fades, classic clipper cuts, and everything in between. Browse what your barber can do.
-          </p>
-        </div>
-
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {HAIRCUT_STYLES.map((style) => (
-            <div
-              key={style.name}
-              className="group rounded-xl border border-border/60 bg-card p-5 hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-              style={{ boxShadow: "var(--shadow-elegant)" }}
-              onClick={handleBookNow}
-            >
-              {/* Style icon strip */}
-              <div className="h-1.5 w-8 rounded-full mb-4" style={{ background: "var(--gradient-gold)" }} />
-              <h3 className="font-display text-base font-semibold mb-3 leading-tight">{style.name}</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {style.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="text-[10px] px-2 py-0.5 font-normal">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-              <div className="mt-4 flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
-                Book this style <ChevronRight className="h-3 w-3" />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="text-center mt-10">
-          <p className="text-sm text-muted-foreground mb-4">Not sure which style is right for you?</p>
-          <Button onClick={handleBookNow} style={{ boxShadow: "var(--shadow-gold)" }}>
-            Book a Consultation <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        </div>
-      </section>
 
       {/* ── Parallax Divider ── */}
       <div ref={divider1.ref} className="relative h-72 overflow-hidden">
@@ -472,19 +430,19 @@ function Landing() {
         </div>
 
         {dataLoading ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="flex flex-wrap justify-center gap-5">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="rounded-xl border border-border/40 bg-card/60 h-64 animate-pulse" />
+              <div key={i} className="rounded-xl border border-border/40 bg-card/60 h-64 animate-pulse w-72" />
             ))}
           </div>
         ) : barbers.length === 0 ? (
           <div className="text-center text-muted-foreground py-10">No barbers listed yet.</div>
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="flex flex-wrap justify-center gap-5">
             {barbers.map((b) => (
               <div
                 key={b.barber_id}
-                className="group rounded-xl border border-border/60 bg-card p-6 text-center hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 flex flex-col"
+                className="group rounded-xl border border-border/60 bg-card p-6 text-center hover:border-primary/40 hover:-translate-y-1 transition-all duration-300 flex flex-col w-72"
                 style={{ boxShadow: "var(--shadow-elegant)" }}
               >
                 <div className="relative mx-auto mb-4 w-fit">

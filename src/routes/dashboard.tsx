@@ -14,7 +14,25 @@ import {
   Phone,
   Globe,
   UserPlus,
+  Copy,
+  Check,
+  Pencil,
+  Trash2,
+  PlusCircle,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
   ResponsiveContainer,
   PieChart,
@@ -106,6 +124,7 @@ function OwnerDashboard() {
   const [dueCustomers, setDueCustomers] = useState<DueCustomer[]>([]);
   const [revenuePeriod, setRevenuePeriod] = useState<"today" | "week" | "month">("today");
   const [availBarber, setAvailBarber] = useState<string>("");
+  const [showInvite, setShowInvite] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -400,20 +419,26 @@ function OwnerDashboard() {
               {format(new Date(), "EEEE, MMMM d, yyyy")}
             </p>
           </div>
-          <div className="min-w-[200px]">
-            <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
-              Revenue period
-            </label>
-            <Select value={revenuePeriod} onValueChange={(value) => setRevenuePeriod(value as "today" | "week" | "month") }>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="today">Today</SelectItem>
-                <SelectItem value="week">This Week</SelectItem>
-                <SelectItem value="month">This Month</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="flex items-end gap-3">
+            <Button variant="outline" size="sm" onClick={() => setShowInvite(true)} className="flex items-center gap-1.5">
+              <UserPlus className="h-3.5 w-3.5" />
+              Invite Barber
+            </Button>
+            <div className="min-w-[200px]">
+              <label className="text-xs text-muted-foreground uppercase tracking-wider mb-2 block">
+                Revenue period
+              </label>
+              <Select value={revenuePeriod} onValueChange={(value) => setRevenuePeriod(value as "today" | "week" | "month") }>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="week">This Week</SelectItem>
+                  <SelectItem value="month">This Month</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </header>
@@ -706,7 +731,379 @@ function OwnerDashboard() {
           )}
         </Card>
       </div>
+      <ServicesManager />
+      <InviteBarberDialog open={showInvite} onClose={() => setShowInvite(false)} />
     </div>
+  );
+}
+
+// ── Services Manager ─────────────────────────────────────────────────────────
+
+const SHOP_ID_CONST = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+
+type Service = {
+  service_id: string;
+  name: string;
+  description: string | null;
+  duration_mins: number;
+  price: number;
+  expertise_tag: string | null;
+  is_active: boolean;
+  sort_order: number;
+};
+
+type ServiceForm = {
+  name: string;
+  description: string;
+  duration_mins: string;
+  price: string;
+  expertise_tag: string;
+};
+
+const EMPTY_FORM: ServiceForm = { name: "", description: "", duration_mins: "", price: "", expertise_tag: "" };
+
+function ServicesManager() {
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Service | null>(null);
+  const [form, setForm] = useState<ServiceForm>(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Service | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = async () => {
+    const { data } = await supabase
+      .from("services")
+      .select("*")
+      .eq("shop_id", SHOP_ID_CONST)
+      .order("sort_order", { ascending: true });
+    setServices((data ?? []) as Service[]);
+    setLoadingServices(false);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setDialogOpen(true);
+  };
+
+  const openEdit = (s: Service) => {
+    setEditing(s);
+    setForm({
+      name: s.name,
+      description: s.description ?? "",
+      duration_mins: String(s.duration_mins),
+      price: String(s.price),
+      expertise_tag: s.expertise_tag ?? "",
+    });
+    setDialogOpen(true);
+  };
+
+  const save = async () => {
+    if (!form.name.trim() || !form.price || !form.duration_mins) {
+      toast.error("Name, price, and duration are required.");
+      return;
+    }
+    setSaving(true);
+    const payload = {
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      duration_mins: parseInt(form.duration_mins),
+      price: parseFloat(form.price),
+      expertise_tag: form.expertise_tag.trim() || null,
+      shop_id: SHOP_ID_CONST,
+    };
+
+    if (editing) {
+      const { error } = await supabase.from("services").update(payload).eq("service_id", editing.service_id);
+      if (error) { toast.error(error.message); setSaving(false); return; }
+      toast.success("Service updated.");
+    } else {
+      const { error } = await supabase.from("services").insert(payload);
+      if (error) { toast.error(error.message); setSaving(false); return; }
+      toast.success("Service created.");
+    }
+
+    setSaving(false);
+    setDialogOpen(false);
+    load();
+  };
+
+  const toggleActive = async (s: Service) => {
+    const { error } = await supabase
+      .from("services")
+      .update({ is_active: !s.is_active })
+      .eq("service_id", s.service_id);
+    if (error) { toast.error(error.message); return; }
+    setServices((prev) => prev.map((x) => x.service_id === s.service_id ? { ...x, is_active: !s.is_active } : x));
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    const { error } = await supabase.from("services").delete().eq("service_id", deleteTarget.service_id);
+    setDeleting(false);
+    if (error) { toast.error(error.message); return; }
+    toast.success("Service deleted.");
+    setDeleteTarget(null);
+    load();
+  };
+
+  const field = (key: keyof ServiceForm, label: string, props?: React.InputHTMLAttributes<HTMLInputElement>) => (
+    <div>
+      <Label htmlFor={key}>{label}</Label>
+      <Input
+        id={key}
+        value={form[key]}
+        onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+        className="mt-1.5"
+        {...props}
+      />
+    </div>
+  );
+
+  return (
+    <>
+      <div className="rounded-xl border border-border/60 bg-card" style={{ boxShadow: "var(--shadow-elegant)" }}>
+        <div className="flex items-center justify-between p-5 border-b border-border/40">
+          <h3 className="font-display text-lg font-semibold">Services</h3>
+          <Button size="sm" onClick={openCreate}>
+            <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+            New Service
+          </Button>
+        </div>
+
+        {loadingServices ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : services.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">No services yet. Add your first one.</div>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {services.map((s) => (
+              <div key={s.service_id} className={`flex items-center gap-4 px-5 py-4 ${!s.is_active ? "opacity-50" : ""}`}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm truncate">{s.name}</p>
+                    {!s.is_active && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Inactive</span>
+                    )}
+                  </div>
+                  {s.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{s.description}</p>}
+                  <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                    <span>{s.duration_mins} min</span>
+                    {s.expertise_tag && <span>· {s.expertise_tag}</span>}
+                  </div>
+                </div>
+                <span className="font-display font-bold text-base text-primary shrink-0">${Number(s.price).toFixed(2)}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title={s.is_active ? "Deactivate" : "Activate"} onClick={() => toggleActive(s)}>
+                    {s.is_active
+                      ? <ToggleRight className="h-4 w-4 text-primary" />
+                      : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Edit" onClick={() => openEdit(s)}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" title="Delete" onClick={() => setDeleteTarget(s)}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create / Edit dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(v) => !v && setDialogOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">{editing ? "Edit Service" : "New Service"}</DialogTitle>
+            <DialogDescription>{editing ? "Update the details for this service." : "Fill in the details for the new service."}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {field("name", "Name *", { placeholder: "e.g. Classic Fade" })}
+            {field("price", "Price ($) *", { type: "number", min: "0", step: "0.01", placeholder: "25.00" })}
+            {field("duration_mins", "Duration (mins) *", { type: "number", min: "1", placeholder: "30" })}
+            {field("expertise_tag", "Tag", { placeholder: "e.g. Fade, Cut, Beard" })}
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <textarea
+                id="description"
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Optional short description…"
+                className="mt-1.5 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-none"
+              />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button onClick={save} disabled={saving}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editing ? "Save Changes" : "Create Service"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Delete Service?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete <strong>{deleteTarget?.name}</strong>. Existing appointments using this service won't be affected.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete} disabled={deleting}>
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function InviteBarberDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const SHOP_ID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [specialty, setSpecialty] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const generate = async () => {
+    if (!name.trim()) {
+      toast.error("Barber name is required");
+      return;
+    }
+    setGenerating(true);
+    const { data, error } = await supabase
+      .from("invites")
+      .insert({
+        role: "barber",
+        shop_id: SHOP_ID,
+        email: email.trim() || null,
+        barber_name: name.trim(),
+        barber_specialty: specialty.trim() || null,
+      })
+      .select("token")
+      .single();
+    setGenerating(false);
+    if (error || !data) {
+      toast.error("Failed to create invite");
+      return;
+    }
+    const link = `${window.location.origin}/invite?token=${data.token}`;
+    setInviteLink(link);
+  };
+
+  const copy = async () => {
+    if (!inviteLink) return;
+    await navigator.clipboard.writeText(inviteLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleClose = () => {
+    setName("");
+    setEmail("");
+    setSpecialty("");
+    setInviteLink(null);
+    setCopied(false);
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl">Invite a Barber</DialogTitle>
+          <DialogDescription>
+            Fill in the barber's details before sending the invite. The link expires in 7 days and can only be used once.
+          </DialogDescription>
+        </DialogHeader>
+
+        {!inviteLink ? (
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label htmlFor="invite-name">Full name <span className="text-destructive">*</span></Label>
+              <Input
+                id="invite-name"
+                placeholder="e.g. Marcus Williams"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-specialty">Specialty <span className="text-muted-foreground">(optional)</span></Label>
+              <Input
+                id="invite-specialty"
+                placeholder="e.g. Fades & Lineups"
+                value={specialty}
+                onChange={(e) => setSpecialty(e.target.value)}
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="invite-email">Email <span className="text-muted-foreground">(optional)</span></Label>
+              <Input
+                id="invite-email"
+                type="email"
+                placeholder="barber@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1.5"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Pre-fills the email on their signup form.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button onClick={generate} disabled={generating || !name.trim()}>
+                {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Generate Invite Link
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <div>
+              <Label>Invite link</Label>
+              <div className="flex gap-2 mt-1.5">
+                <Input value={inviteLink} readOnly className="text-xs" />
+                <Button size="icon" variant="outline" onClick={copy}>
+                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Share this link with your barber. It can only be used once.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button variant="outline" onClick={() => { setInviteLink(null); setName(""); setEmail(""); setSpecialty(""); }}>
+                Generate Another
+              </Button>
+              <Button onClick={handleClose}>Done</Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -29,7 +29,8 @@ function LoginPage() {
       return;
     }
     toast.success("Welcome back");
-    navigate({ to: role ? ROLE_HOME[role] : "/dashboard" });
+    const dest = role === "barber" ? ROLE_HOME["barber"] : "/";
+    navigate({ to: dest });
   };
 
   return (

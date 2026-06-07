@@ -14,7 +14,7 @@ export type Profile = {
 export const ROLE_HOME: Record<AppRole, string> = {
   owner: "/dashboard",
   barber: "/barber",
-  customer: "/booking",
+  customer: "/customer",
 };
 
 type AuthCtx = {
@@ -26,8 +26,9 @@ type AuthCtx = {
   signUp: (
     email: string,
     password: string,
-    role: AppRole
-  ) => Promise<{ error: string | null; role: AppRole | null }>;
+    role: AppRole,
+    phone?: string
+  ) => Promise<{ error: string | null; role: AppRole | null; userId: string | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -88,7 +89,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(p);
       return { error: null, role: p?.role ?? null };
     },
-    signUp: async (email, password, role) => {
+    signUp: async (email, password, role, phone) => {
+      // Check phone uniqueness before creating any auth account
+      if (role === "customer" && phone) {
+        const { data: available, error: rpcErr } = await supabase.rpc("check_phone_available", {
+          p_phone: phone,
+          p_shop_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        });
+        if (rpcErr) {
+          return { error: rpcErr.message, role: null, userId: null };
+        }
+        if (!available) {
+          return { error: "An account with this phone number already exists. Try logging in instead.", role: null, userId: null };
+        }
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -97,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           data: { role },
         },
       });
-      if (error) return { error: error.message, role: null };
+      if (error) return { error: error.message, role: null, userId: null };
       const newUser = data.user;
       if (newUser) {
         const { error: pErr } = await supabase
@@ -105,25 +120,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .upsert({ id: newUser.id, role }, { onConflict: "id" });
         if (pErr) {
           console.error("profile insert error", pErr);
-          return { error: pErr.message, role: null };
+          return { error: pErr.message, role: null, userId: null };
         }
         if (role === "customer") {
           const name = email.split("@")[0];
           const { error: cErr } = await supabase.from("customers").insert({
             name,
             email,
-            phone: "",
+            phone: phone ?? "",
             shop_id: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+            user_id: newUser.id,
           });
           if (cErr) {
             console.error("customer insert error", cErr);
+            // Unique constraint violation means this phone is already registered
+            if (cErr.code === "23505") {
+              return { error: "An account with this phone number already exists. Try logging in instead.", role: null, userId: null };
+            }
+            return { error: cErr.message, role: null, userId: null };
           }
         }
         if (data.session) {
           setProfile(await fetchProfile(newUser.id));
         }
       }
-      return { error: null, role };
+      return { error: null, role, userId: newUser?.id ?? null };
     },
     signOut: async () => {
       await supabase.auth.signOut();

@@ -9,6 +9,8 @@ import {
   Loader2,
   Calendar,
   Home,
+  ClipboardList,
+  PlusCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,14 +27,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
       return;
     }
     if (profile) {
-      // Customers don't belong here
-      if (profile.role === "customer") {
-        navigate({ to: "/booking" });
-        return;
-      }
       // Barbers can't see owner dashboard
       if (profile.role === "barber" && path === "/dashboard") {
         navigate({ to: "/barber" });
+      }
+      // Non-customers can't see customer dashboard
+      if (profile.role !== "customer" && path === "/customer") {
+        navigate({ to: "/dashboard" });
       }
     }
   }, [loading, user, profile, navigate, path]);
@@ -55,7 +56,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
         ]
       : role === "barber"
         ? [{ to: "/barber", label: "My Schedule", icon: Calendar }]
-        : [{ to: "/booking", label: "Book a Cut", icon: Calendar }];
+        : [
+          { to: "/customer", label: "My Appointments", icon: ClipboardList },
+          { to: "/booking",  label: "Book a Cut",      icon: PlusCircle },
+        ];
 
   const roleLabel: Record<string, string> = {
     owner: "Shop Owner",
